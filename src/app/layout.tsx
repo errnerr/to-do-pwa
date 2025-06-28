@@ -24,7 +24,7 @@ export default function RootLayout({
       <head>
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#f3f5f9" />
-        <link rel="icon" href="/icons/192.png" />
+        <link rel="icon" href="/icons/maskable_icon_x192.png" />
       </head>
       <body
         className={`${jost.variable} font-sans bg-background text-foreground antialiased min-h-screen`}

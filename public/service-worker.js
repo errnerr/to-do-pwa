@@ -168,8 +168,8 @@ self.addEventListener('push', event => {
   let notificationData = {
     title: 'TaskMaster',
     body: 'You have a new task reminder!',
-    icon: '/icons/192.png',
-    badge: '/icons/192.png',
+    icon: '/icons/maskable_icon_x192.png',
+    badge: '/icons/maskable_icon_x192.png',
     data: {
       dateOfArrival: Date.now(),
       primaryKey: 1
@@ -183,8 +183,8 @@ self.addEventListener('push', event => {
       notificationData = {
         title: payload.title || 'TaskMaster',
         body: payload.body || 'You have a new task reminder!',
-        icon: payload.icon || '/icons/192.png',
-        badge: payload.badge || '/icons/192.png',
+        icon: payload.icon || '/icons/maskable_icon_x192.png',
+        badge: payload.badge || '/icons/maskable_icon_x192.png',
         data: {
           ...payload.data,
           dateOfArrival: Date.now(),
@@ -194,12 +194,12 @@ self.addEventListener('push', event => {
           {
             action: 'explore',
             title: 'View Tasks',
-            icon: '/icons/128.png'
+            icon: '/icons/maskable_icon_x128.png'
           },
           {
             action: 'close',
             title: 'Close',
-            icon: '/icons/128.png'
+            icon: '/icons/maskable_icon_x128.png'
           }
         ],
         vibrate: [100, 50, 100]

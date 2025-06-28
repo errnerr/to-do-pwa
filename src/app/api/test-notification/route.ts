@@ -44,8 +44,8 @@ export async function POST(request: NextRequest) {
         const payload = JSON.stringify({
           title: 'TaskMaster',
           body: message,
-          icon: '/icons/192.png',
-          badge: '/icons/192.png',
+          icon: '/icons/maskable_icon_x192.png',
+          badge: '/icons/maskable_icon_x192.png',
           data: {
             url: '/',
             timestamp: Date.now()

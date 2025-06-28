@@ -22,6 +22,8 @@ import {
   isSubscribedToPushNotifications
 } from "@/lib/push-notifications";
 import { authenticateDevice, getCurrentDeviceId } from "@/lib/auth";
+import { DialogTitle } from "@/components/ui/dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 
 interface Task {
   id: string;
@@ -276,7 +278,7 @@ export default function Home() {
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
             <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-slate-500">Initialising...</p>
+            <p className="text-black">Initialising...</p>
           </div>
         </div>
       </AppShell>
@@ -293,7 +295,7 @@ export default function Home() {
           className="mb-6"
         >
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-lg font-bold text-black">Your Tasks</h1>
+            <h1 className="text-lg font-bold text-black tracking-wide">Your tasks</h1>
             <div className="flex items-center gap-2">
               <Drawer>
                 <DrawerTrigger asChild>
@@ -394,6 +396,9 @@ export default function Home() {
                   </Button>
                 </DateDrawerTrigger>
                 <DateDrawerContent>
+                  <VisuallyHidden>
+                    <DialogTitle>Set Due Date & Reminder</DialogTitle>
+                  </VisuallyHidden>
                   <div className="mx-auto w-full max-w-md p-2 sm:p-6 max-h-[95vh] overflow-y-auto">
                     <div className="space-y-6">
                       <AnimatePresence mode="wait">
@@ -413,7 +418,7 @@ export default function Home() {
                                   setSelectedDate(date);
                                   if (date) setDrawerStep('time');
                                 }}
-                                className="rounded-md border mt-2 w-full min-h-[200px] !h-auto"
+                                className="rounded-md border mt-2 w-full "
                                 disabled={(date) => date < startOfDay(new Date())}
                               />
                             </div>
@@ -472,7 +477,7 @@ export default function Home() {
                   exit={{ opacity: 0, height: 0 }}
                   className="space-y-2"
                 >
-                  <h3 className="text-sm font-medium text-slate-600 uppercase tracking-wide">
+                  <h3 className="text-sm font-medium text-black tracking-wide">
                     Pending ({pendingTasks.length})
                   </h3>
                   <AnimatePresence>
@@ -538,7 +543,7 @@ export default function Home() {
                   exit={{ opacity: 0, height: 0 }}
                   className="space-y-2"
                 >
-                  <h3 className="text-sm font-medium text-slate-600 uppercase tracking-wide">
+                  <h3 className="text-sm font-medium text-gray-500 tracking-wide">
                     Completed ({completedTasks.length})
                   </h3>
                   <AnimatePresence>

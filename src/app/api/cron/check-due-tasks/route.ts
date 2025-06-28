@@ -62,8 +62,8 @@ export async function GET(request: NextRequest) {
               const payload = JSON.stringify({
                 title: 'TaskMaster - Due Tasks',
                 body: message,
-                icon: '/icons/192.png',
-                badge: '/icons/192.png',
+                icon: '/icons/maskable_icon_x192.png',
+                badge: '/icons/maskable_icon_x192.png',
                 data: {
                   url: '/',
                   timestamp: Date.now()
