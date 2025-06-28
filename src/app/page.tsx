@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Calendar, Plus, Trash2, Bell, Clock, Settings, Search, ArrowLeft } from "lucide-react";
-import { format, isToday, isBefore, startOfDay, addDays } from "date-fns";
+import { format, isToday, isBefore, startOfDay } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -39,7 +39,6 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showCompleted, setShowCompleted] = useState(true);
   const [drawerStep, setDrawerStep] = useState<'date' | 'time'>('date');
-  const dateDrawerCloseRef = useRef<HTMLButtonElement>(null);
   const [dateDrawerOpen, setDateDrawerOpen] = useState(false);
 
   // Load tasks from localStorage on mount
