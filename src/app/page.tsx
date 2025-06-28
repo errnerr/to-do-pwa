@@ -196,7 +196,7 @@ export default function Home() {
                   </Button>
                 </DateDrawerTrigger>
                 <DateDrawerContent>
-                  <div className="mx-auto w-full max-w-md p-6 max-h-[95vh] overflow-y-auto">
+                  <div className="mx-auto w-full max-w-md p-2 sm:p-6 max-h-[95vh] overflow-y-auto">
                     <DateDrawerHeader>
                       <DateDrawerTitle>Set Due Date & Reminder</DateDrawerTitle>
                     </DateDrawerHeader>
@@ -211,7 +211,7 @@ export default function Home() {
                             transition={{ duration: 0.2 }}
                           >
                             <Label className="text-sm font-medium">Due Date</Label>
-                            <div className="w-full max-w-xs mx-auto text-center">
+                            <div className="w-full max-w-full sm:max-w-xs mx-auto overflow-x-auto text-center px-1">
                               <CalendarComponent
                                 mode="single"
                                 selected={selectedDate}
@@ -219,7 +219,7 @@ export default function Home() {
                                   setSelectedDate(date);
                                   if (date) setDrawerStep('time');
                                 }}
-                                className="rounded-md border mt-2 w-full"
+                                className="rounded-md border mt-2 w-full min-w-[280px] max-w-full"
                                 disabled={(date) => date < startOfDay(new Date())}
                               />
                             </div>
