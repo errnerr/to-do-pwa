@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -9,8 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { Calendar, Plus, Trash2, Bell, Clock, Settings, Search } from "lucide-react";
-import { format, isToday, isBefore, startOfDay } from "date-fns";
+import { Calendar, Plus, Trash2, Bell, Clock, Settings, Search, ArrowLeft } from "lucide-react";
+import { format, isToday, isBefore, startOfDay, addDays } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -38,6 +38,9 @@ export default function Home() {
   const [reminderTime, setReminderTime] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [showCompleted, setShowCompleted] = useState(true);
+  const [drawerStep, setDrawerStep] = useState<'date' | 'time'>('date');
+  const dateDrawerCloseRef = useRef<HTMLButtonElement>(null);
+  const [dateDrawerOpen, setDateDrawerOpen] = useState(false);
 
   // Load tasks from localStorage on mount
   useEffect(() => {
@@ -60,6 +63,11 @@ export default function Home() {
 
   const addTask = () => {
     if (newTask.trim()) {
+      // Prevent adding tasks in the past
+      if (selectedDate && isBefore(startOfDay(selectedDate), startOfDay(new Date()))) {
+        toast.error("Cannot set a task in the past.");
+        return;
+      }
       const task: Task = {
         id: Date.now().toString(),
         text: newTask.trim(),
@@ -168,36 +176,90 @@ export default function Home() {
                 onKeyPress={(e) => e.key === "Enter" && addTask()}
                 className="flex-1 bg-white h-12 text-base rounded-lg"
               />
-              <DateDrawer>
+              <DateDrawer open={dateDrawerOpen} onOpenChange={(open) => {
+                setDateDrawerOpen(open);
+                if (!open) {
+                  setTimeout(() => {
+                    setDrawerStep('date');
+                    setSelectedDate(undefined);
+                    setReminderTime("");
+                  }, 300);
+                }
+              }}>
                 <DateDrawerTrigger asChild>
-                  <Button variant="outline" size="icon" className="shrink-0 bg-transparent h-12 w-12 rounded-lg">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="shrink-0 bg-transparent h-12 w-12 rounded-lg"
+                    onClick={() => setDateDrawerOpen(true)}
+                  >
                     <Calendar className="h-5 w-5" />
                   </Button>
                 </DateDrawerTrigger>
                 <DateDrawerContent>
-                  <div className="mx-auto w-full max-w-sm p-6">
+                  <div className="mx-auto w-full max-w-md p-6 max-h-[95vh] overflow-y-auto">
                     <DateDrawerHeader>
                       <DateDrawerTitle>Set Due Date & Reminder</DateDrawerTitle>
                     </DateDrawerHeader>
                     <div className="space-y-6 mt-6">
-                      <div>
-                        <Label className="text-sm font-medium">Due Date</Label>
-                        <CalendarComponent
-                          mode="single"
-                          selected={selectedDate}
-                          onSelect={setSelectedDate}
-                          className="rounded-md border mt-2 w-full"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-sm font-medium">Reminder Time</Label>
-                        <Input
-                          type="time"
-                          value={reminderTime}
-                          onChange={(e) => setReminderTime(e.target.value)}
-                          className="mt-2 h-12 text-base rounded-lg"
-                        />
-                      </div>
+                      <AnimatePresence mode="wait">
+                        {drawerStep === 'date' && (
+                          <motion.div
+                            key="date"
+                            initial={{ opacity: 0, x: 40 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -40 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <Label className="text-sm font-medium">Due Date</Label>
+                            <div className="w-full max-w-xs mx-auto text-center">
+                              <CalendarComponent
+                                mode="single"
+                                selected={selectedDate}
+                                onSelect={(date) => {
+                                  setSelectedDate(date);
+                                  if (date) setDrawerStep('time');
+                                }}
+                                className="rounded-md border mt-2 w-full"
+                                disabled={(date) => date < startOfDay(new Date())}
+                              />
+                            </div>
+                          </motion.div>
+                        )}
+                        {drawerStep === 'time' && (
+                          <motion.div
+                            key="time"
+                            initial={{ opacity: 0, x: 40 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -40 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <div className="flex items-center mb-4">
+                              <button
+                                type="button"
+                                onClick={() => setDrawerStep('date')}
+                                className="mr-2 p-2 rounded-full hover:bg-muted"
+                                aria-label="Back to date picker"
+                              >
+                                <ArrowLeft className="h-5 w-5" />
+                              </button>
+                              <Label className="text-sm font-medium">Reminder Time</Label>
+                            </div>
+                            <Input
+                              type="time"
+                              value={reminderTime}
+                              onChange={(e) => setReminderTime(e.target.value)}
+                              className="mt-2 h-12 text-base rounded-lg w-full"
+                            />
+                            <Button
+                              className="mt-6 w-full"
+                              onClick={() => setDateDrawerOpen(false)}
+                            >
+                              Set
+                            </Button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
                   </div>
                 </DateDrawerContent>

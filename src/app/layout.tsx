@@ -28,8 +28,8 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link rel="manifest" href="/manifest.json" />
-        <meta name="theme-color" content="#2563eb" />
-        <link rel="icon" href="/favicon.ico" />
+        <meta name="theme-color" content="#000" />
+        <link rel="icon" href="/icons/192.png" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
