@@ -16,6 +16,11 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { Drawer as DateDrawer, DrawerTrigger as DateDrawerTrigger, DrawerContent as DateDrawerContent, DrawerHeader as DateDrawerHeader, DrawerTitle as DateDrawerTitle } from "@/components/ui/drawer";
 import { Switch } from "@/components/ui/switch";
+import { 
+  subscribeToPushNotifications, 
+  unsubscribeFromPushNotifications, 
+  isSubscribedToPushNotifications
+} from "@/lib/push-notifications";
 
 interface Task {
   id: string;
@@ -40,6 +45,8 @@ export default function Home() {
   const [showCompleted, setShowCompleted] = useState(true);
   const [drawerStep, setDrawerStep] = useState<'date' | 'time'>('date');
   const [dateDrawerOpen, setDateDrawerOpen] = useState(false);
+  const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(false);
+  const [pushNotificationsSupported, setPushNotificationsSupported] = useState(false);
 
   // Load tasks from localStorage on mount
   useEffect(() => {
@@ -53,6 +60,21 @@ export default function Home() {
       }));
       setTasks(tasksWithDates);
     }
+  }, []);
+
+  // Check push notification support and status
+  useEffect(() => {
+    const checkPushNotifications = async () => {
+      const supported = 'serviceWorker' in navigator && 'PushManager' in window;
+      setPushNotificationsSupported(supported);
+      
+      if (supported) {
+        const isSubscribed = await isSubscribedToPushNotifications();
+        setPushNotificationsEnabled(isSubscribed);
+      }
+    };
+    
+    checkPushNotifications();
   }, []);
 
   // Save tasks to localStorage whenever they change
@@ -93,6 +115,56 @@ export default function Home() {
   const deleteTask = (id: string) => {
     setTasks(tasks.filter(task => task.id !== id));
     toast.success("Task deleted!");
+  };
+
+  const handlePushNotificationToggle = async (enabled: boolean) => {
+    try {
+      if (enabled) {
+        const success = await subscribeToPushNotifications();
+        if (success) {
+          setPushNotificationsEnabled(true);
+          toast.success("Push notifications enabled!");
+        } else {
+          toast.error("Failed to enable push notifications");
+        }
+      } else {
+        const success = await unsubscribeFromPushNotifications();
+        if (success) {
+          setPushNotificationsEnabled(false);
+          toast.success("Push notifications disabled!");
+        } else {
+          toast.error("Failed to disable push notifications");
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling push notifications:', error);
+      toast.error("Failed to update push notification settings");
+    }
+  };
+
+  const testNotification = async () => {
+    try {
+      const response = await fetch('/api/test-notification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: 'This is a test notification from TaskMaster! 🎉'
+        }),
+      });
+
+      const result = await response.json();
+      
+      if (response.ok) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.error || 'Failed to send test notification');
+      }
+    } catch (error) {
+      console.error('Error sending test notification:', error);
+      toast.error('Failed to send test notification');
+    }
   };
 
   // Filter tasks based on search and completion status
@@ -146,6 +218,36 @@ export default function Home() {
                           onCheckedChange={setShowCompleted}
                         />
                       </div>
+                      {pushNotificationsSupported ? (
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span>Push notifications</span>
+                              <p className="text-xs text-slate-500 mt-1">
+                                Get notified when tasks are due
+                              </p>
+                            </div>
+                            <Switch
+                              checked={pushNotificationsEnabled}
+                              onCheckedChange={handlePushNotificationToggle}
+                            />
+                          </div>
+                          {pushNotificationsEnabled && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={testNotification}
+                              className="w-full"
+                            >
+                              Test Notification
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-sm text-slate-500">
+                          Push notifications not supported in this browser
+                        </div>
+                      )}
                     </div>
                   </div>
                 </DrawerContent>
@@ -211,7 +313,7 @@ export default function Home() {
                             transition={{ duration: 0.2 }}
                           >
                             <Label className="text-sm font-sm text-slate-500 ml-2">Due Date</Label>
-                            <div className="w-full max-w-full sm:max-w-xs mx-auto overflow-x-auto text-center px-1 mb-4">
+                            <div className="w-full max-w-full sm:max-w-xs mx-auto text-center px-1 mb-4">
                               <CalendarComponent
                                 mode="single"
                                 selected={selectedDate}
@@ -219,7 +321,7 @@ export default function Home() {
                                   setSelectedDate(date);
                                   if (date) setDrawerStep('time');
                                 }}
-                                className="rounded-md border mt-2 w-full h-auto"
+                                className="rounded-md border mt-2 w-full min-h-[200px] !h-auto"
                                 disabled={(date) => date < startOfDay(new Date())}
                               />
                             </div>
