@@ -125,7 +125,7 @@ export default function Home() {
           className="mb-6"
         >
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold text-slate-800">TaskMaster</h1>
+            <h1 className="text-lg font-bold text-slate-500">Your Tasks</h1>
             <div className="flex items-center gap-2">
               <Drawer>
                 <DrawerTrigger asChild>
@@ -200,7 +200,7 @@ export default function Home() {
                     <DateDrawerHeader>
                       <DateDrawerTitle>Set Due Date & Reminder</DateDrawerTitle>
                     </DateDrawerHeader>
-                    <div className="space-y-6 mt-6">
+                    <div className="space-y-6">
                       <AnimatePresence mode="wait">
                         {drawerStep === 'date' && (
                           <motion.div
@@ -210,8 +210,8 @@ export default function Home() {
                             exit={{ opacity: 0, x: -40 }}
                             transition={{ duration: 0.2 }}
                           >
-                            <Label className="text-sm font-medium">Due Date</Label>
-                            <div className="w-full max-w-full sm:max-w-xs mx-auto overflow-x-auto text-center px-1">
+                            <Label className="text-sm font-sm text-slate-500 ml-2">Due Date</Label>
+                            <div className="w-full max-w-full sm:max-w-xs mx-auto overflow-x-auto text-center px-1 mb-4">
                               <CalendarComponent
                                 mode="single"
                                 selected={selectedDate}
@@ -219,7 +219,7 @@ export default function Home() {
                                   setSelectedDate(date);
                                   if (date) setDrawerStep('time');
                                 }}
-                                className="rounded-md border mt-2 w-full min-w-[280px] max-w-full"
+                                className="rounded-md border mt-2 w-full h-auto"
                                 disabled={(date) => date < startOfDay(new Date())}
                               />
                             </div>
