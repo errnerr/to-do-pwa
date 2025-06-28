@@ -293,7 +293,7 @@ export default function Home() {
           className="mb-6"
         >
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-lg font-bold text-slate-500">Your Tasks</h1>
+            <h1 className="text-lg font-bold text-black">Your Tasks</h1>
             <div className="flex items-center gap-2">
               <Drawer>
                 <DrawerTrigger asChild>
@@ -387,7 +387,7 @@ export default function Home() {
                   <Button
                     variant="outline"
                     size="icon"
-                    className="shrink-0 bg-transparent h-12 w-12 rounded-lg"
+                    className="shrink-0 bg-white h-12 w-12 rounded-lg"
                     onClick={() => setDateDrawerOpen(true)}
                   >
                     <Calendar className="h-5 w-5" />
@@ -395,9 +395,6 @@ export default function Home() {
                 </DateDrawerTrigger>
                 <DateDrawerContent>
                   <div className="mx-auto w-full max-w-md p-2 sm:p-6 max-h-[95vh] overflow-y-auto">
-                    <DateDrawerHeader>
-                      <DateDrawerTitle>Set Due Date & Reminder</DateDrawerTitle>
-                    </DateDrawerHeader>
                     <div className="space-y-6">
                       <AnimatePresence mode="wait">
                         {drawerStep === 'date' && (
@@ -408,7 +405,6 @@ export default function Home() {
                             exit={{ opacity: 0, x: -40 }}
                             transition={{ duration: 0.2 }}
                           >
-                            <Label className="text-sm font-sm text-slate-500 ml-2">Due Date</Label>
                             <div className="w-full max-w-full sm:max-w-xs mx-auto text-center px-1 mb-4">
                               <CalendarComponent
                                 mode="single"
@@ -461,7 +457,7 @@ export default function Home() {
                   </div>
                 </DateDrawerContent>
               </DateDrawer>
-              <Button onClick={addTask} className="shrink-0 h-12 w-12 rounded-lg text-base flex items-center justify-center">
+              <Button onClick={addTask} className="shrink-0 h-12 w-12 rounded-lg text-base flex items-center justify-center bg-[#e8ff65] text-black hover:bg-[#e8ff65]/80">
                 <Plus className="h-5 w-5" />
               </Button>
             </div>
