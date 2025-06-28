@@ -1,48 +1,91 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Redis } from '@upstash/redis';
+import { savePushSubscription, getPushSubscriptionsByUserId, deletePushSubscription } from '@/lib/database';
+import { getUserByDeviceId } from '@/lib/database';
 
-// You will need to set these in your Vercel/Next.js environment
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
-
-const SUBSCRIPTION_KEY = 'push_subscriptions';
+// Helper function to get user ID from device ID
+async function getUserIdFromDeviceId(deviceId: string): Promise<string | null> {
+  try {
+    const user = await getUserByDeviceId(deviceId);
+    return user?.id || null;
+  } catch (error) {
+    console.error('Error getting user ID from device ID:', error);
+    return null;
+  }
+}
 
 // Save a new subscription (POST)
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    console.log('Push subscription save endpoint called');
-    
-    const body = await req.json();
-    console.log('Subscription data received:', {
-      endpoint: body.endpoint?.substring(0, 50) + '...',
-      hasKeys: !!body.keys
-    });
-    
-    if (!body || !body.endpoint) {
-      console.error('Invalid subscription data');
-      return NextResponse.json({ error: 'Invalid subscription' }, { status: 400 });
+    const deviceId = request.headers.get('x-device-id');
+    if (!deviceId) {
+      return NextResponse.json({ error: 'Device ID required' }, { status: 400 });
     }
-    
-    // Store by endpoint for idempotency
-    console.log('Saving subscription to Redis...');
-    await redis.hset(SUBSCRIPTION_KEY, { [body.endpoint]: JSON.stringify(body) });
-    console.log('Subscription saved successfully');
-    
-    return NextResponse.json({ success: true });
+
+    const userId = await getUserIdFromDeviceId(deviceId);
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const body = await request.json();
+    const { subscription } = body;
+
+    if (!subscription || !subscription.endpoint || !subscription.keys) {
+      return NextResponse.json({ error: 'Invalid subscription data' }, { status: 400 });
+    }
+
+    const savedSubscription = await savePushSubscription(userId, subscription);
+    return NextResponse.json({ success: true, subscription: savedSubscription });
   } catch (error) {
-    console.error('Error saving subscription:', error);
+    console.error('Error saving push subscription:', error);
     return NextResponse.json({ error: 'Failed to save subscription' }, { status: 500 });
   }
 }
 
-// List all subscriptions (GET)
-export async function GET() {
+// Get subscriptions (GET)
+export async function GET(request: NextRequest) {
   try {
-    const all = await redis.hgetall(SUBSCRIPTION_KEY);
-    return NextResponse.json({ subscriptions: all });
-  } catch {
+    const deviceId = request.headers.get('x-device-id');
+    if (!deviceId) {
+      return NextResponse.json({ error: 'Device ID required' }, { status: 400 });
+    }
+
+    const userId = await getUserIdFromDeviceId(deviceId);
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const subscriptions = await getPushSubscriptionsByUserId(userId);
+    return NextResponse.json({ subscriptions });
+  } catch (error) {
+    console.error('Error fetching push subscriptions:', error);
     return NextResponse.json({ error: 'Failed to fetch subscriptions' }, { status: 500 });
+  }
+}
+
+// Delete subscription (DELETE)
+export async function DELETE(request: NextRequest) {
+  try {
+    const deviceId = request.headers.get('x-device-id');
+    if (!deviceId) {
+      return NextResponse.json({ error: 'Device ID required' }, { status: 400 });
+    }
+
+    const userId = await getUserIdFromDeviceId(deviceId);
+    if (!userId) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    }
+
+    const body = await request.json();
+    const { endpoint } = body;
+
+    if (!endpoint) {
+      return NextResponse.json({ error: 'Endpoint required' }, { status: 400 });
+    }
+
+    await deletePushSubscription(userId, endpoint);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting push subscription:', error);
+    return NextResponse.json({ error: 'Failed to delete subscription' }, { status: 500 });
   }
 } 

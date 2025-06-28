@@ -21,14 +21,15 @@ import {
   unsubscribeFromPushNotifications, 
   isSubscribedToPushNotifications
 } from "@/lib/push-notifications";
+import { authenticateDevice, getCurrentDeviceId } from "@/lib/auth";
 
 interface Task {
   id: string;
   text: string;
   completed: boolean;
-  dueDate?: Date;
-  reminder?: string;
-  createdAt: Date;
+  due_date?: string;
+  reminder_time?: string;
+  created_at: string;
 }
 
 // Custom function to check if a date is overdue
@@ -47,20 +48,46 @@ export default function Home() {
   const [dateDrawerOpen, setDateDrawerOpen] = useState(false);
   const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(false);
   const [pushNotificationsSupported, setPushNotificationsSupported] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load tasks from localStorage on mount
+  // Initialize device authentication and load tasks
   useEffect(() => {
-    const stored = localStorage.getItem("tasks");
-    if (stored) {
-      const parsedTasks = JSON.parse(stored);
-      const tasksWithDates = parsedTasks.map((task: Task) => ({
-        ...task,
-        dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
-        createdAt: task.createdAt ? new Date(task.createdAt) : new Date()
-      }));
-      setTasks(tasksWithDates);
-    }
+    const initializeApp = async () => {
+      try {
+        // Authenticate device
+        await authenticateDevice();
+        
+        // Load tasks from database
+        await loadTasks();
+        
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error initializing app:', error);
+        toast.error('Failed to initialize app');
+        setIsLoading(false);
+      }
+    };
+    
+    initializeApp();
   }, []);
+
+  // Load tasks from database
+  const loadTasks = async () => {
+    try {
+      const deviceId = getCurrentDeviceId();
+      const response = await fetch('/api/tasks', {
+        headers: {
+          'x-device-id': deviceId || '',
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setTasks(data.tasks || []);
+      }
+    } catch (error) {
+      console.error('Error loading tasks:', error);
+    }
+  };
 
   // Check push notification support and status
   useEffect(() => {
@@ -77,44 +104,98 @@ export default function Home() {
     checkPushNotifications();
   }, []);
 
-  // Save tasks to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(tasks));
-  }, [tasks]);
-
-  const addTask = () => {
+  const addTask = async () => {
     if (newTask.trim()) {
       // Prevent adding tasks in the past
       if (selectedDate && isBefore(startOfDay(selectedDate), startOfDay(new Date()))) {
         toast.error("Cannot set a task in the past.");
         return;
       }
-      const task: Task = {
-        id: Date.now().toString(),
-        text: newTask.trim(),
-        completed: false,
-        dueDate: selectedDate,
-        reminder: reminderTime || undefined,
-        createdAt: new Date()
-      };
-      setTasks([task, ...tasks]);
-      setNewTask("");
-      setSelectedDate(undefined);
-      setReminderTime("");
-      toast.success("Task added successfully!");
+
+      try {
+        const deviceId = getCurrentDeviceId();
+        const response = await fetch('/api/tasks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-device-id': deviceId || '',
+          },
+          body: JSON.stringify({
+            text: newTask.trim(),
+            dueDate: selectedDate?.toISOString(),
+            reminderTime: reminderTime || undefined,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setTasks([data.task, ...tasks]);
+          setNewTask("");
+          setSelectedDate(undefined);
+          setReminderTime("");
+          toast.success("Task added successfully!");
+        } else {
+          toast.error("Failed to add task");
+        }
+      } catch (error) {
+        console.error('Error adding task:', error);
+        toast.error("Failed to add task");
+      }
     }
   };
 
-  const toggleTask = (id: string) => {
-    setTasks(tasks.map(task => 
-      task.id === id ? { ...task, completed: !task.completed } : task
-    ));
-    toast.success("Task updated!");
+  const toggleTask = async (id: string) => {
+    try {
+      const task = tasks.find(t => t.id === id);
+      if (!task) return;
+
+      const deviceId = getCurrentDeviceId();
+      const response = await fetch('/api/tasks', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-device-id': deviceId || '',
+        },
+        body: JSON.stringify({
+          id,
+          completed: !task.completed,
+        }),
+      });
+
+      if (response.ok) {
+        setTasks(tasks.map(task => 
+          task.id === id ? { ...task, completed: !task.completed } : task
+        ));
+        toast.success("Task updated!");
+      } else {
+        toast.error("Failed to update task");
+      }
+    } catch (error) {
+      console.error('Error updating task:', error);
+      toast.error("Failed to update task");
+    }
   };
 
-  const deleteTask = (id: string) => {
-    setTasks(tasks.filter(task => task.id !== id));
-    toast.success("Task deleted!");
+  const deleteTask = async (id: string) => {
+    try {
+      const deviceId = getCurrentDeviceId();
+      const response = await fetch(`/api/tasks?id=${id}`, {
+        method: 'DELETE',
+        headers: {
+          'x-device-id': deviceId || '',
+        },
+      });
+
+      if (response.ok) {
+        setTasks(tasks.filter(task => task.id !== id));
+        toast.success("Task deleted!");
+      } else {
+        toast.error("Failed to delete task");
+      }
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      toast.error("Failed to delete task");
+    }
   };
 
   const handlePushNotificationToggle = async (enabled: boolean) => {
@@ -144,10 +225,12 @@ export default function Home() {
 
   const testNotification = async () => {
     try {
+      const deviceId = getCurrentDeviceId();
       const response = await fetch('/api/test-notification', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'x-device-id': deviceId || '',
         },
         body: JSON.stringify({
           message: 'This is a test notification from TaskMaster! 🎉'
@@ -186,6 +269,19 @@ export default function Home() {
   const formatTime = (time: string) => {
     return time;
   };
+
+  if (isLoading) {
+    return (
+      <AppShell>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-slate-500">Initializing...</p>
+          </div>
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell>
@@ -396,27 +492,27 @@ export default function Home() {
                         <Checkbox checked={task.completed} onCheckedChange={() => toggleTask(task.id)} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-slate-900 truncate">{task.text}</p>
-                          {(task.dueDate || task.reminder) && (
+                          {(task.due_date || task.reminder_time) && (
                             <div className="flex items-center gap-2 mt-1">
-                              {task.dueDate && (
+                              {task.due_date && (
                                 <Badge
                                   variant={
-                                    isOverdue(task.dueDate)
+                                    isOverdue(new Date(task.due_date))
                                       ? "destructive"
-                                      : isToday(task.dueDate)
+                                      : isToday(new Date(task.due_date))
                                         ? "default"
                                         : "secondary"
                                   }
                                   className="text-xs"
                                 >
                                   <Calendar className="h-3 w-3 mr-1" />
-                                  {formatDate(task.dueDate)}
+                                  {formatDate(new Date(task.due_date))}
                                 </Badge>
                               )}
-                              {task.reminder && (
+                              {task.reminder_time && (
                                 <Badge variant="outline" className="text-xs">
                                   <Bell className="h-3 w-3 mr-1" />
-                                  {formatTime(task.reminder)}
+                                  {formatTime(task.reminder_time)}
                                 </Badge>
                               )}
                             </div>
@@ -461,18 +557,18 @@ export default function Home() {
                         <Checkbox checked={task.completed} onCheckedChange={() => toggleTask(task.id)} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-slate-600 line-through truncate">{task.text}</p>
-                          {(task.dueDate || task.reminder) && (
+                          {(task.due_date || task.reminder_time) && (
                             <div className="flex items-center gap-2 mt-1">
-                              {task.dueDate && (
+                              {task.due_date && (
                                 <Badge variant="secondary" className="text-xs opacity-60">
                                   <Calendar className="h-3 w-3 mr-1" />
-                                  {formatDate(task.dueDate)}
+                                  {formatDate(new Date(task.due_date))}
                                 </Badge>
                               )}
-                              {task.reminder && (
+                              {task.reminder_time && (
                                 <Badge variant="outline" className="text-xs opacity-60">
                                   <Clock className="h-3 w-3 mr-1" />
-                                  {formatTime(task.reminder)}
+                                  {formatTime(task.reminder_time)}
                                 </Badge>
                               )}
                             </div>

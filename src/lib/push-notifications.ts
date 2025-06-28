@@ -1,3 +1,5 @@
+import { getCurrentDeviceId } from './auth';
+
 // Push notification utilities
 export interface PushSubscription {
   endpoint: string;
@@ -7,73 +9,73 @@ export interface PushSubscription {
   };
 }
 
+const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+
+if (!VAPID_PUBLIC_KEY) {
+  console.warn('VAPID_PUBLIC_KEY is not set. Push notifications will not work.');
+}
+
 // Request notification permission and subscribe to push
 export async function subscribeToPushNotifications(): Promise<boolean> {
   try {
-    // Check if service worker is supported
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
       console.log('Push notifications not supported');
       return false;
     }
 
-    // Check if VAPID key is available
-    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-    if (!vapidPublicKey) {
-      console.error('VAPID public key not found');
+    if (!VAPID_PUBLIC_KEY) {
+      console.error('VAPID_PUBLIC_KEY not configured');
       return false;
     }
 
-    console.log('Starting push notification subscription process...');
-
-    // Request permission
-    const permission = await Notification.requestPermission();
-    console.log('Notification permission result:', permission);
-    
-    if (permission !== 'granted') {
-      console.log('Notification permission denied');
-      return false;
-    }
-
-    // Register service worker if not already registered
-    console.log('Registering service worker...');
+    // Register service worker
     const registration = await navigator.serviceWorker.register('/service-worker.js');
-    await navigator.serviceWorker.ready;
-    console.log('Service worker ready');
+    console.log('Service Worker registered:', registration);
 
-    // Convert VAPID key
-    const applicationServerKey = urlBase64ToUint8Array(vapidPublicKey);
-    console.log('VAPID key converted, length:', applicationServerKey.length);
+    // Wait for service worker to be ready
+    await navigator.serviceWorker.ready;
+
+    // Check if already subscribed
+    const existingSubscription = await registration.pushManager.getSubscription();
+    if (existingSubscription) {
+      console.log('Already subscribed to push notifications');
+      return true;
+    }
 
     // Subscribe to push notifications
-    console.log('Subscribing to push notifications...');
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: applicationServerKey
+      applicationServerKey: VAPID_PUBLIC_KEY
     });
 
-    console.log('Push subscription created:', subscription.endpoint);
+    console.log('Push subscription created:', subscription);
 
     // Save subscription to server
-    console.log('Saving subscription to server...');
+    const deviceId = getCurrentDeviceId();
     const response = await fetch('/api/push-subscription', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'x-device-id': deviceId || '',
       },
-      body: JSON.stringify(subscription),
+      body: JSON.stringify({
+        subscription: {
+          endpoint: subscription.endpoint,
+          keys: {
+            p256dh: btoa(String.fromCharCode(...new Uint8Array(subscription.getKey('p256dh')!))),
+            auth: btoa(String.fromCharCode(...new Uint8Array(subscription.getKey('auth')!)))
+          }
+        }
+      })
     });
 
-    console.log('Server response status:', response.status);
-    
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Failed to save subscription:', errorText);
-      throw new Error('Failed to save subscription');
+      console.error('Failed to save subscription to server');
+      await subscription.unsubscribe();
+      return false;
     }
 
-    const result = await response.json();
-    console.log('Subscription saved successfully:', result);
-
+    console.log('Subscription saved to server successfully');
     return true;
   } catch (error) {
     console.error('Error subscribing to push notifications:', error);
@@ -84,13 +86,42 @@ export async function subscribeToPushNotifications(): Promise<boolean> {
 // Unsubscribe from push notifications
 export async function unsubscribeFromPushNotifications(): Promise<boolean> {
   try {
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
-    
-    if (subscription) {
-      await subscription.unsubscribe();
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      return false;
     }
-    
+
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) {
+      console.log('No service worker registration found');
+      return false;
+    }
+
+    const subscription = await registration.pushManager.getSubscription();
+    if (!subscription) {
+      console.log('No push subscription found');
+      return false;
+    }
+
+    // Delete from server first
+    const deviceId = getCurrentDeviceId();
+    const response = await fetch('/api/push-subscription', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-device-id': deviceId || '',
+      },
+      body: JSON.stringify({
+        endpoint: subscription.endpoint
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Failed to delete subscription from server');
+    }
+
+    // Unsubscribe from push manager
+    await subscription.unsubscribe();
+    console.log('Unsubscribed from push notifications');
     return true;
   } catch (error) {
     console.error('Error unsubscribing from push notifications:', error);
@@ -105,11 +136,15 @@ export async function isSubscribedToPushNotifications(): Promise<boolean> {
       return false;
     }
 
-    const registration = await navigator.serviceWorker.ready;
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) {
+      return false;
+    }
+
     const subscription = await registration.pushManager.getSubscription();
     return !!subscription;
   } catch (error) {
-    console.error('Error checking push subscription status:', error);
+    console.error('Error checking push notification subscription:', error);
     return false;
   }
 }
@@ -117,30 +152,4 @@ export async function isSubscribedToPushNotifications(): Promise<boolean> {
 // Check if notifications are permitted
 export function areNotificationsPermitted(): boolean {
   return Notification.permission === 'granted';
-}
-
-// Convert VAPID public key from base64 to Uint8Array
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  try {
-    if (!base64String || base64String.length === 0) {
-      throw new Error('VAPID public key is empty');
-    }
-
-    const padding = '='.repeat((4 - base64String.length % 4) % 4);
-    const base64 = (base64String + padding)
-      .replace(/-/g, '+')
-      .replace(/_/g, '/');
-
-    const rawData = window.atob(base64);
-    const outputArray = new Uint8Array(rawData.length);
-
-    for (let i = 0; i < rawData.length; ++i) {
-      outputArray[i] = rawData.charCodeAt(i);
-    }
-    
-    return outputArray;
-  } catch (error) {
-    console.error('Error converting VAPID key:', error);
-    throw new Error('Invalid VAPID public key format');
-  }
 } 

@@ -1,119 +1,100 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Redis } from '@upstash/redis';
-import webpush from 'web-push';
+import { getDueTasksForUser, getAllActivePushSubscriptions } from '@/lib/database';
 
-// Check if required environment variables are set
-const requiredEnvVars = {
-  UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
-  UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
-  NEXT_PUBLIC_VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-  VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
-  CRON_SECRET: process.env.CRON_SECRET,
-};
-
-// Check for missing environment variables
-const missingEnvVars = Object.entries(requiredEnvVars)
-  .filter(([, value]) => !value)
-  .map(([key]) => key);
-
-if (missingEnvVars.length > 0) {
-  console.warn('Missing environment variables:', missingEnvVars);
-}
-
-const redis = missingEnvVars.includes('UPSTASH_REDIS_REST_URL') || missingEnvVars.includes('UPSTASH_REDIS_REST_TOKEN')
-  ? null
-  : new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL!,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-    });
-
-const SUBSCRIPTION_KEY = 'push_subscriptions';
-
-// Configure web-push with VAPID keys (only if available)
-if (!missingEnvVars.includes('NEXT_PUBLIC_VAPID_PUBLIC_KEY') && !missingEnvVars.includes('VAPID_PRIVATE_KEY')) {
-  webpush.setVapidDetails(
-    'mailto:your-email@example.com', // Replace with your email
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-    process.env.VAPID_PRIVATE_KEY!
-  );
-}
-
-interface Task {
-  id: string;
-  text: string;
-  dueDate?: string;
-  reminder?: string;
-  completed: boolean;
-}
-
-interface PushSubscription {
-  endpoint: string;
-  keys: {
-    p256dh: string;
-    auth: string;
-  };
-}
-
-// Cron job handler - runs every hour
 export async function GET(request: NextRequest) {
   try {
-    // Check if required environment variables are missing
-    if (missingEnvVars.length > 0) {
-      return NextResponse.json({
-        error: 'Missing environment variables',
-        missing: missingEnvVars,
-        message: 'Please configure all required environment variables in Vercel'
-      }, { status: 500 });
-    }
-
     // Verify this is a cron job request
     const authHeader = request.headers.get('authorization');
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log('Cron job started: Checking for due tasks...');
+    console.log('Cron job: Checking for due tasks...');
 
-    // Get all push subscriptions
-    const subscriptions = await redis!.hgetall(SUBSCRIPTION_KEY);
-    if (!subscriptions || Object.keys(subscriptions).length === 0) {
-      console.log('No push subscriptions found');
-      return NextResponse.json({ message: 'No subscriptions to check' });
+    // Get current time in HH:MM format
+    const now = new Date();
+    const currentTime = now.toTimeString().slice(0, 5); // HH:MM format
+    console.log('Current time:', currentTime);
+
+    // Get all active push subscriptions with user info
+    const subscriptions = await getAllActivePushSubscriptions();
+    console.log(`Found ${subscriptions.length} active subscriptions`);
+
+    if (subscriptions.length === 0) {
+      return NextResponse.json({ message: 'No active subscriptions found' });
     }
 
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const currentTime = `${currentHour.toString().padStart(2, '0')}:${currentMinute.toString().padStart(2, '0')}`;
+    const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+    if (!VAPID_PRIVATE_KEY) {
+      console.error('VAPID_PRIVATE_KEY not configured');
+      return NextResponse.json({ error: 'VAPID private key not configured' }, { status: 500 });
+    }
 
     let notificationsSent = 0;
     let errors = 0;
 
-    // Check each subscription for due tasks
-    for (const [endpoint, subscriptionData] of Object.entries(subscriptions)) {
+    // Group subscriptions by user
+    const userSubscriptions = new Map<string, typeof subscriptions>();
+    for (const subscription of subscriptions) {
+      if (!userSubscriptions.has(subscription.user_id)) {
+        userSubscriptions.set(subscription.user_id, []);
+      }
+      userSubscriptions.get(subscription.user_id)!.push(subscription);
+    }
+
+    // Check due tasks for each user
+    for (const [userId, userSubs] of userSubscriptions) {
       try {
-        // Handle both string and object formats from Redis
-        let subscription: PushSubscription;
-        if (typeof subscriptionData === 'string') {
-          subscription = JSON.parse(subscriptionData);
-        } else {
-          subscription = subscriptionData as PushSubscription;
-        }
-        
-        // Get tasks for this user (stored in localStorage, so we'll need to handle this differently)
-        // For now, we'll send a general notification
-        const dueTasks = await checkForDueTasks(subscription, currentTime);
+        // Get due tasks for this user
+        const dueTasks = await getDueTasksForUser(userId, currentTime);
         
         if (dueTasks.length > 0) {
-          const success = await sendPushNotification(subscription, dueTasks);
-          if (success) {
-            notificationsSent++;
-          } else {
-            errors++;
+          console.log(`User ${userId} has ${dueTasks.length} due tasks`);
+
+          // Create notification message
+          const taskList = dueTasks.map(task => `• ${task.text}`).join('\n');
+          const message = `You have ${dueTasks.length} task(s) due now:\n${taskList}`;
+
+          // Send notification to all user's subscriptions
+          for (const subscription of userSubs) {
+            try {
+              const payload = JSON.stringify({
+                title: 'TaskMaster - Due Tasks',
+                body: message,
+                icon: '/icons/192.png',
+                badge: '/icons/192.png',
+                data: {
+                  url: '/',
+                  timestamp: Date.now()
+                }
+              });
+
+              const response = await fetch(subscription.endpoint, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'TTL': '86400',
+                  'Urgency': 'high',
+                  'Authorization': `vapid t=${generateVAPIDToken(subscription.endpoint, VAPID_PRIVATE_KEY)}`
+                },
+                body: payload
+              });
+
+              if (response.ok) {
+                notificationsSent++;
+                console.log(`Notification sent to ${subscription.endpoint}`);
+              } else {
+                console.error(`Failed to send notification to ${subscription.endpoint}:`, response.status);
+                errors++;
+              }
+            } catch (error) {
+              console.error('Error sending notification:', error);
+              errors++;
+            }
           }
         }
       } catch (error) {
-        console.error('Error processing subscription for endpoint:', endpoint, error);
+        console.error(`Error processing user ${userId}:`, error);
         errors++;
       }
     }
@@ -124,7 +105,7 @@ export async function GET(request: NextRequest) {
       success: true,
       notificationsSent,
       errors,
-      timestamp: new Date().toISOString()
+      message: `Due task check completed. ${notificationsSent} notifications sent.`
     });
 
   } catch (error) {
@@ -133,50 +114,11 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Check for due tasks (placeholder - would need user-specific task storage)
-async function checkForDueTasks(subscription: PushSubscription, currentTime: string): Promise<Task[]> {
-  // This is a simplified version. In a real implementation, you'd need to:
-  // 1. Store tasks in a database (not localStorage)
-  // 2. Associate tasks with user subscriptions
-  // 3. Check for tasks due at the current time
-  
-  // For now, return a mock task to test the notification system
-  return [{
-    id: '1',
-    text: 'Test task due now',
-    dueDate: new Date().toISOString(),
-    reminder: currentTime,
-    completed: false
-  }];
-}
-
-// Send push notification
-async function sendPushNotification(subscription: PushSubscription, tasks: Task[]): Promise<boolean> {
-  try {
-    const taskText = tasks.length === 1 ? tasks[0].text : `${tasks.length} tasks`;
-    
-    const payload = JSON.stringify({
-      title: 'TaskMaster Reminder',
-      body: `You have ${tasks.length === 1 ? 'a task' : 'tasks'} due: ${taskText}`,
-      icon: '/icons/192.png',
-      badge: '/icons/72.png',
-      data: {
-        url: '/',
-        tasks: tasks
-      }
-    });
-
-    await webpush.sendNotification(subscription, payload);
-    return true;
-  } catch (error) {
-    console.error('Error sending push notification:', error);
-    
-    // If subscription is invalid, remove it
-    if (error instanceof Error && error.message.includes('410')) {
-      await redis!.hdel(SUBSCRIPTION_KEY, subscription.endpoint);
-      console.log('Removed invalid subscription:', subscription.endpoint);
-    }
-    
-    return false;
-  }
+// Simple VAPID token generation (in production, use a proper library)
+function generateVAPIDToken(endpoint: string, privateKey: string): string {
+  // This is a simplified implementation
+  // In production, use a proper VAPID library like 'web-push'
+  const timestamp = Math.floor(Date.now() / 1000);
+  const token = btoa(`${endpoint}:${timestamp}:${privateKey}`);
+  return token;
 } 
