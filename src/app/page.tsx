@@ -3,21 +3,19 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { Calendar, Plus, Trash2, Bell, Clock, Menu, Settings, Search } from "lucide-react";
+import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { Calendar, Plus, Trash2, Bell, Clock, Settings, Search } from "lucide-react";
 import { format, isToday, isBefore, startOfDay } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
-import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
-import { Switch } from "@/components/ui/switch";
 import { Drawer as DateDrawer, DrawerTrigger as DateDrawerTrigger, DrawerContent as DateDrawerContent, DrawerHeader as DateDrawerHeader, DrawerTitle as DateDrawerTitle } from "@/components/ui/drawer";
+import { Switch } from "@/components/ui/switch";
 
 interface Task {
   id: string;
@@ -46,7 +44,7 @@ export default function Home() {
     const stored = localStorage.getItem("tasks");
     if (stored) {
       const parsedTasks = JSON.parse(stored);
-      const tasksWithDates = parsedTasks.map((task: any) => ({
+      const tasksWithDates = parsedTasks.map((task: Task) => ({
         ...task,
         dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
         createdAt: task.createdAt ? new Date(task.createdAt) : new Date()
