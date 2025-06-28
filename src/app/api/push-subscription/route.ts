@@ -12,14 +12,27 @@ const SUBSCRIPTION_KEY = 'push_subscriptions';
 // Save a new subscription (POST)
 export async function POST(req: NextRequest) {
   try {
+    console.log('Push subscription save endpoint called');
+    
     const body = await req.json();
+    console.log('Subscription data received:', {
+      endpoint: body.endpoint?.substring(0, 50) + '...',
+      hasKeys: !!body.keys
+    });
+    
     if (!body || !body.endpoint) {
+      console.error('Invalid subscription data');
       return NextResponse.json({ error: 'Invalid subscription' }, { status: 400 });
     }
+    
     // Store by endpoint for idempotency
+    console.log('Saving subscription to Redis...');
     await redis.hset(SUBSCRIPTION_KEY, { [body.endpoint]: JSON.stringify(body) });
+    console.log('Subscription saved successfully');
+    
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (error) {
+    console.error('Error saving subscription:', error);
     return NextResponse.json({ error: 'Failed to save subscription' }, { status: 500 });
   }
 }

@@ -2,13 +2,11 @@ const CACHE_NAME = 'taskmaster-v1';
 const STATIC_CACHE = 'static-v1';
 const DYNAMIC_CACHE = 'dynamic-v1';
 
-// Files to cache immediately
+// Files to cache immediately - only include files that actually exist
 const STATIC_FILES = [
   '/',
   '/manifest.json',
-  '/favicon.ico',
-  '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/favicon.ico'
 ];
 
 // Install event - cache static files
@@ -17,10 +15,23 @@ self.addEventListener('install', event => {
     caches.open(STATIC_CACHE)
       .then(cache => {
         console.log('Caching static files');
-        return cache.addAll(STATIC_FILES);
+        // Use addAll with error handling for individual files
+        return Promise.allSettled(
+          STATIC_FILES.map(url => 
+            cache.add(url).catch(error => {
+              console.warn(`Failed to cache ${url}:`, error);
+              return null;
+            })
+          )
+        );
       })
       .then(() => {
         console.log('Service Worker installed');
+        return self.skipWaiting();
+      })
+      .catch(error => {
+        console.error('Service Worker installation failed:', error);
+        // Continue with installation even if caching fails
         return self.skipWaiting();
       })
   );
@@ -156,8 +167,8 @@ async function doBackgroundSync() {
 self.addEventListener('push', event => {
   const options = {
     body: event.data ? event.data.text() : 'You have a new task reminder!',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-72x72.png',
+    icon: '/icons/192.png',
+    badge: '/icons/72.png',
     vibrate: [100, 50, 100],
     data: {
       dateOfArrival: Date.now(),
@@ -167,12 +178,12 @@ self.addEventListener('push', event => {
       {
         action: 'explore',
         title: 'View Tasks',
-        icon: '/icons/icon-96x96.png'
+        icon: '/icons/128.png'
       },
       {
         action: 'close',
         title: 'Close',
-        icon: '/icons/icon-96x96.png'
+        icon: '/icons/128.png'
       }
     ]
   };

@@ -48,8 +48,11 @@ interface PushSubscription {
 // Test endpoint to send a push notification
 export async function POST(request: NextRequest) {
   try {
+    console.log('Test notification endpoint called');
+    
     // Check if required environment variables are missing
     if (missingEnvVars.length > 0) {
+      console.error('Missing environment variables:', missingEnvVars);
       return NextResponse.json({
         error: 'Missing environment variables',
         missing: missingEnvVars,
@@ -59,12 +62,19 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const { message = 'Test notification from TaskMaster!' } = body;
+    console.log('Test message:', message);
 
     // Get all push subscriptions
+    console.log('Fetching push subscriptions from Redis...');
     const subscriptions = await redis!.hgetall(SUBSCRIPTION_KEY);
+    console.log('Subscriptions found:', subscriptions);
+    
     if (!subscriptions || Object.keys(subscriptions).length === 0) {
+      console.log('No push subscriptions found in Redis');
       return NextResponse.json({ error: 'No push subscriptions found' }, { status: 404 });
     }
+
+    console.log('Number of subscriptions:', Object.keys(subscriptions).length);
 
     let notificationsSent = 0;
     let errors = 0;
@@ -72,20 +82,34 @@ export async function POST(request: NextRequest) {
     // Send notification to all subscriptions
     for (const [endpoint, subscriptionData] of Object.entries(subscriptions)) {
       try {
-        const subscription: PushSubscription = JSON.parse(subscriptionData as string);
+        console.log('Processing subscription for endpoint:', endpoint.substring(0, 50) + '...');
+        console.log('Subscription data type:', typeof subscriptionData);
+        console.log('Subscription data:', subscriptionData);
+        
+        // Handle both string and object formats from Redis
+        let subscription: PushSubscription;
+        if (typeof subscriptionData === 'string') {
+          subscription = JSON.parse(subscriptionData);
+        } else {
+          subscription = subscriptionData as PushSubscription;
+        }
+        
+        console.log('Parsed subscription:', subscription);
         
         const payload = JSON.stringify({
           title: 'TaskMaster Test',
           body: message,
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-72x72.png',
+          icon: '/icons/192.png',
+          badge: '/icons/72.png',
           data: {
             url: '/',
             timestamp: new Date().toISOString()
           }
         });
 
+        console.log('Sending push notification...');
         await webpush.sendNotification(subscription, payload);
+        console.log('Push notification sent successfully');
         notificationsSent++;
       } catch (error) {
         console.error('Error sending test notification:', error);
@@ -99,6 +123,8 @@ export async function POST(request: NextRequest) {
         errors++;
       }
     }
+
+    console.log(`Test notification completed: ${notificationsSent} sent, ${errors} errors`);
 
     return NextResponse.json({
       success: true,

@@ -92,7 +92,13 @@ export async function GET(request: NextRequest) {
     // Check each subscription for due tasks
     for (const [endpoint, subscriptionData] of Object.entries(subscriptions)) {
       try {
-        const subscription: PushSubscription = JSON.parse(subscriptionData as string);
+        // Handle both string and object formats from Redis
+        let subscription: PushSubscription;
+        if (typeof subscriptionData === 'string') {
+          subscription = JSON.parse(subscriptionData);
+        } else {
+          subscription = subscriptionData as PushSubscription;
+        }
         
         // Get tasks for this user (stored in localStorage, so we'll need to handle this differently)
         // For now, we'll send a general notification
@@ -152,8 +158,8 @@ async function sendPushNotification(subscription: PushSubscription, tasks: Task[
     const payload = JSON.stringify({
       title: 'TaskMaster Reminder',
       body: `You have ${tasks.length === 1 ? 'a task' : 'tasks'} due: ${taskText}`,
-      icon: '/icons/icon-192x192.png',
-      badge: '/icons/icon-72x72.png',
+      icon: '/icons/192.png',
+      badge: '/icons/72.png',
       data: {
         url: '/',
         tasks: tasks
