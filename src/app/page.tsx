@@ -1,0 +1,356 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { Label } from "@/components/ui/label";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Calendar, Plus, Trash2, Bell, Clock, Menu, Settings, Search } from "lucide-react";
+import { format, isToday, isBefore, startOfDay } from "date-fns";
+import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
+import { AppShell } from "@/components/AppShell";
+import { Drawer, DrawerTrigger, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
+import { Switch } from "@/components/ui/switch";
+import { Drawer as DateDrawer, DrawerTrigger as DateDrawerTrigger, DrawerContent as DateDrawerContent, DrawerHeader as DateDrawerHeader, DrawerTitle as DateDrawerTitle } from "@/components/ui/drawer";
+
+interface Task {
+  id: string;
+  text: string;
+  completed: boolean;
+  dueDate?: Date;
+  reminder?: string;
+  createdAt: Date;
+}
+
+// Custom function to check if a date is overdue
+const isOverdue = (date: Date) => {
+  return isBefore(startOfDay(date), startOfDay(new Date()));
+};
+
+export default function Home() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [newTask, setNewTask] = useState("");
+  const [selectedDate, setSelectedDate] = useState<Date>();
+  const [reminderTime, setReminderTime] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showCompleted, setShowCompleted] = useState(true);
+
+  // Load tasks from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem("tasks");
+    if (stored) {
+      const parsedTasks = JSON.parse(stored);
+      const tasksWithDates = parsedTasks.map((task: any) => ({
+        ...task,
+        dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
+        createdAt: task.createdAt ? new Date(task.createdAt) : new Date()
+      }));
+      setTasks(tasksWithDates);
+    }
+  }, []);
+
+  // Save tasks to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem("tasks", JSON.stringify(tasks));
+  }, [tasks]);
+
+  const addTask = () => {
+    if (newTask.trim()) {
+      const task: Task = {
+        id: Date.now().toString(),
+        text: newTask.trim(),
+        completed: false,
+        dueDate: selectedDate,
+        reminder: reminderTime || undefined,
+        createdAt: new Date()
+      };
+      setTasks([task, ...tasks]);
+      setNewTask("");
+      setSelectedDate(undefined);
+      setReminderTime("");
+      toast.success("Task added successfully!");
+    }
+  };
+
+  const toggleTask = (id: string) => {
+    setTasks(tasks.map(task => 
+      task.id === id ? { ...task, completed: !task.completed } : task
+    ));
+    toast.success("Task updated!");
+  };
+
+  const deleteTask = (id: string) => {
+    setTasks(tasks.filter(task => task.id !== id));
+    toast.success("Task deleted!");
+  };
+
+  // Filter tasks based on search and completion status
+  const filteredTasks = tasks.filter(task => {
+    const matchesSearch = task.text.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCompletion = showCompleted ? true : !task.completed;
+    return matchesSearch && matchesCompletion;
+  });
+
+  const pendingTasks = filteredTasks.filter(task => !task.completed);
+  const completedTasks = filteredTasks.filter(task => task.completed);
+
+  const formatDate = (date: Date) => {
+    if (isToday(date)) return "Today";
+    if (isOverdue(date)) return "Overdue";
+    return format(date, "MMM d");
+  };
+
+  const formatTime = (time: string) => {
+    return time;
+  };
+
+  return (
+    <AppShell>
+      <div className="mx-auto max-w-2xl">
+        {/* Header with Search and Menu */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6"
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold text-slate-800">TaskMaster</h1>
+            <div className="flex items-center gap-2">
+              <Drawer>
+                <DrawerTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </DrawerTrigger>
+                <DrawerContent>
+                  <div className="mx-auto w-full max-w-sm p-6">
+                    <DrawerHeader>
+                      <DrawerTitle>Settings</DrawerTitle>
+                    </DrawerHeader>
+                    <div className="mt-8 space-y-6">
+                      <div className="flex items-center justify-between">
+                        <span>Show completed tasks</span>
+                        <Switch
+                          checked={showCompleted}
+                          onCheckedChange={setShowCompleted}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </DrawerContent>
+              </Drawer>
+            </div>
+          </div>
+          
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+            <Input
+              placeholder="Search tasks..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </motion.div>
+
+        <Card className="shadow-none rounded-none border-0 bg-transparent backdrop-blur-sm">
+          <CardHeader className="pb-4 px-0">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add a new task..."
+                value={newTask}
+                onChange={(e) => setNewTask(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && addTask()}
+                className="flex-1 bg-white h-12 text-base rounded-lg"
+              />
+              <DateDrawer>
+                <DateDrawerTrigger asChild>
+                  <Button variant="outline" size="icon" className="shrink-0 bg-transparent h-12 w-12 rounded-lg">
+                    <Calendar className="h-5 w-5" />
+                  </Button>
+                </DateDrawerTrigger>
+                <DateDrawerContent>
+                  <div className="mx-auto w-full max-w-sm p-6">
+                    <DateDrawerHeader>
+                      <DateDrawerTitle>Set Due Date & Reminder</DateDrawerTitle>
+                    </DateDrawerHeader>
+                    <div className="space-y-6 mt-6">
+                      <div>
+                        <Label className="text-sm font-medium">Due Date</Label>
+                        <CalendarComponent
+                          mode="single"
+                          selected={selectedDate}
+                          onSelect={setSelectedDate}
+                          className="rounded-md border mt-2 w-full"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-sm font-medium">Reminder Time</Label>
+                        <Input
+                          type="time"
+                          value={reminderTime}
+                          onChange={(e) => setReminderTime(e.target.value)}
+                          className="mt-2 h-12 text-base rounded-lg"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </DateDrawerContent>
+              </DateDrawer>
+              <Button onClick={addTask} className="shrink-0 h-12 w-12 rounded-lg text-base flex items-center justify-center">
+                <Plus className="h-5 w-5" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 p-0">
+            {/* Pending Tasks */}
+            <AnimatePresence>
+              {pendingTasks.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2"
+                >
+                  <h3 className="text-sm font-medium text-slate-600 uppercase tracking-wide">
+                    Pending ({pendingTasks.length})
+                  </h3>
+                  <AnimatePresence>
+                    {pendingTasks.map((task, index) => (
+                      <motion.div
+                        key={task.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        transition={{ delay: index * 0.1 }}
+                        className="flex items-center gap-3 p-3 rounded-lg border bg-white hover:shadow-sm transition-all duration-200"
+                      >
+                        <Checkbox checked={task.completed} onCheckedChange={() => toggleTask(task.id)} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-900 truncate">{task.text}</p>
+                          {(task.dueDate || task.reminder) && (
+                            <div className="flex items-center gap-2 mt-1">
+                              {task.dueDate && (
+                                <Badge
+                                  variant={
+                                    isOverdue(task.dueDate)
+                                      ? "destructive"
+                                      : isToday(task.dueDate)
+                                        ? "default"
+                                        : "secondary"
+                                  }
+                                  className="text-xs"
+                                >
+                                  <Calendar className="h-3 w-3 mr-1" />
+                                  {formatDate(task.dueDate)}
+                                </Badge>
+                              )}
+                              {task.reminder && (
+                                <Badge variant="outline" className="text-xs">
+                                  <Bell className="h-3 w-3 mr-1" />
+                                  {formatTime(task.reminder)}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteTask(task.id)}
+                          className="h-8 w-8 text-slate-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Completed Tasks */}
+            <AnimatePresence>
+              {completedTasks.length > 0 && showCompleted && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-2"
+                >
+                  <h3 className="text-sm font-medium text-slate-600 uppercase tracking-wide">
+                    Completed ({completedTasks.length})
+                  </h3>
+                  <AnimatePresence>
+                    {completedTasks.map((task) => (
+                      <motion.div
+                        key={task.id}
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        className="flex items-center gap-3 p-3 rounded-lg border bg-slate-50 opacity-75"
+                      >
+                        <Checkbox checked={task.completed} onCheckedChange={() => toggleTask(task.id)} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-slate-600 line-through truncate">{task.text}</p>
+                          {(task.dueDate || task.reminder) && (
+                            <div className="flex items-center gap-2 mt-1">
+                              {task.dueDate && (
+                                <Badge variant="secondary" className="text-xs opacity-60">
+                                  <Calendar className="h-3 w-3 mr-1" />
+                                  {formatDate(task.dueDate)}
+                                </Badge>
+                              )}
+                              {task.reminder && (
+                                <Badge variant="outline" className="text-xs opacity-60">
+                                  <Clock className="h-3 w-3 mr-1" />
+                                  {formatTime(task.reminder)}
+                                </Badge>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => deleteTask(task.id)}
+                          className="h-8 w-8 text-slate-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Empty State */}
+            <AnimatePresence>
+              {tasks.length === 0 && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="text-center py-12"
+                >
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 flex items-center justify-center">
+                    <Plus className="h-8 w-8 text-slate-400" />
+                  </div>
+                  <h3 className="text-lg font-medium text-slate-900 mb-2">No tasks yet</h3>
+                  <p className="text-slate-500">Add your first task to get started!</p>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </CardContent>
+        </Card>
+      </div>
+    </AppShell>
+  );
+}
