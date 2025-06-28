@@ -2,19 +2,41 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Redis } from '@upstash/redis';
 import webpush from 'web-push';
 
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL!,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
-});
+// Check if required environment variables are set
+const requiredEnvVars = {
+  UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
+  UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
+  NEXT_PUBLIC_VAPID_PUBLIC_KEY: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+  VAPID_PRIVATE_KEY: process.env.VAPID_PRIVATE_KEY,
+  CRON_SECRET: process.env.CRON_SECRET,
+};
+
+// Check for missing environment variables
+const missingEnvVars = Object.entries(requiredEnvVars)
+  .filter(([, value]) => !value)
+  .map(([key]) => key);
+
+if (missingEnvVars.length > 0) {
+  console.warn('Missing environment variables:', missingEnvVars);
+}
+
+const redis = missingEnvVars.includes('UPSTASH_REDIS_REST_URL') || missingEnvVars.includes('UPSTASH_REDIS_REST_TOKEN')
+  ? null
+  : new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    });
 
 const SUBSCRIPTION_KEY = 'push_subscriptions';
 
-// Configure web-push with VAPID keys
-webpush.setVapidDetails(
-  'mailto:your-email@example.com', // Replace with your email
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-);
+// Configure web-push with VAPID keys (only if available)
+if (!missingEnvVars.includes('NEXT_PUBLIC_VAPID_PUBLIC_KEY') && !missingEnvVars.includes('VAPID_PRIVATE_KEY')) {
+  webpush.setVapidDetails(
+    'mailto:your-email@example.com', // Replace with your email
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+    process.env.VAPID_PRIVATE_KEY!
+  );
+}
 
 interface Task {
   id: string;
@@ -35,6 +57,15 @@ interface PushSubscription {
 // Cron job handler - runs every hour
 export async function GET(request: NextRequest) {
   try {
+    // Check if required environment variables are missing
+    if (missingEnvVars.length > 0) {
+      return NextResponse.json({
+        error: 'Missing environment variables',
+        missing: missingEnvVars,
+        message: 'Please configure all required environment variables in Vercel'
+      }, { status: 500 });
+    }
+
     // Verify this is a cron job request
     const authHeader = request.headers.get('authorization');
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -44,7 +75,7 @@ export async function GET(request: NextRequest) {
     console.log('Cron job started: Checking for due tasks...');
 
     // Get all push subscriptions
-    const subscriptions = await redis.hgetall(SUBSCRIPTION_KEY);
+    const subscriptions = await redis!.hgetall(SUBSCRIPTION_KEY);
     if (!subscriptions || Object.keys(subscriptions).length === 0) {
       console.log('No push subscriptions found');
       return NextResponse.json({ message: 'No subscriptions to check' });
@@ -136,7 +167,7 @@ async function sendPushNotification(subscription: PushSubscription, tasks: Task[
     
     // If subscription is invalid, remove it
     if (error instanceof Error && error.message.includes('410')) {
-      await redis.hdel(SUBSCRIPTION_KEY, subscription.endpoint);
+      await redis!.hdel(SUBSCRIPTION_KEY, subscription.endpoint);
       console.log('Removed invalid subscription:', subscription.endpoint);
     }
     
