@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDueTasksForUser, getAllActivePushSubscriptions } from '@/lib/database';
+import webpush from 'web-push';
+
+webpush.setVapidDetails(
+  'mailto:your-email@example.com',
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
+  process.env.VAPID_PRIVATE_KEY!
+);
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,12 +29,6 @@ export async function GET(request: NextRequest) {
 
     if (subscriptions.length === 0) {
       return NextResponse.json({ message: 'No active subscriptions found' });
-    }
-
-    const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
-    if (!VAPID_PRIVATE_KEY) {
-      console.error('VAPID_PRIVATE_KEY not configured');
-      return NextResponse.json({ error: 'VAPID private key not configured' }, { status: 500 });
     }
 
     let notificationsSent = 0;
@@ -69,24 +70,18 @@ export async function GET(request: NextRequest) {
                 }
               });
 
-              const response = await fetch(subscription.endpoint, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'TTL': '86400',
-                  'Urgency': 'high',
-                  'Authorization': `vapid t=${generateVAPIDToken(subscription.endpoint, VAPID_PRIVATE_KEY)}`
+              await webpush.sendNotification(
+                {
+                  endpoint: subscription.endpoint,
+                  keys: {
+                    p256dh: subscription.p256dh,
+                    auth: subscription.auth,
+                  },
                 },
-                body: payload
-              });
-
-              if (response.ok) {
-                notificationsSent++;
-                console.log(`Notification sent to ${subscription.endpoint}`);
-              } else {
-                console.error(`Failed to send notification to ${subscription.endpoint}:`, response.status);
-                errors++;
-              }
+                payload
+              );
+              notificationsSent++;
+              console.log(`Notification sent to ${subscription.endpoint}`);
             } catch (error) {
               console.error('Error sending notification:', error);
               errors++;
@@ -112,13 +107,4 @@ export async function GET(request: NextRequest) {
     console.error('Cron job error:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-}
-
-// Simple VAPID token generation (in production, use a proper library)
-function generateVAPIDToken(endpoint: string, privateKey: string): string {
-  // This is a simplified implementation
-  // In production, use a proper VAPID library like 'web-push'
-  const timestamp = Math.floor(Date.now() / 1000);
-  const token = btoa(`${endpoint}:${timestamp}:${privateKey}`);
-  return token;
 } 

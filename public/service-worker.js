@@ -165,31 +165,57 @@ async function doBackgroundSync() {
 
 // Push notifications
 self.addEventListener('push', event => {
-  const options = {
-    body: event.data ? event.data.text() : 'You have a new task reminder!',
+  let notificationData = {
+    title: 'TaskMaster',
+    body: 'You have a new task reminder!',
     icon: '/icons/192.png',
-    badge: '/icons/72.png',
-    vibrate: [100, 50, 100],
+    badge: '/icons/192.png',
     data: {
       dateOfArrival: Date.now(),
       primaryKey: 1
-    },
-    actions: [
-      {
-        action: 'explore',
-        title: 'View Tasks',
-        icon: '/icons/128.png'
-      },
-      {
-        action: 'close',
-        title: 'Close',
-        icon: '/icons/128.png'
-      }
-    ]
+    }
   };
 
+  // Try to parse the push data as JSON
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      notificationData = {
+        title: payload.title || 'TaskMaster',
+        body: payload.body || 'You have a new task reminder!',
+        icon: payload.icon || '/icons/192.png',
+        badge: payload.badge || '/icons/192.png',
+        data: {
+          ...payload.data,
+          dateOfArrival: Date.now(),
+          primaryKey: 1
+        },
+        actions: [
+          {
+            action: 'explore',
+            title: 'View Tasks',
+            icon: '/icons/128.png'
+          },
+          {
+            action: 'close',
+            title: 'Close',
+            icon: '/icons/128.png'
+          }
+        ],
+        vibrate: [100, 50, 100]
+      };
+    } catch (error) {
+      console.log('Push data is not JSON, using default notification');
+      // If it's not JSON, try to get it as text
+      const textData = event.data.text();
+      if (textData) {
+        notificationData.body = textData;
+      }
+    }
+  }
+
   event.waitUntil(
-    self.registration.showNotification('TaskMaster', options)
+    self.registration.showNotification(notificationData.title, notificationData)
   );
 });
 

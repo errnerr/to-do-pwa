@@ -275,8 +275,8 @@ export default function Home() {
       <AppShell>
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center">
-            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-slate-500">Initializing...</p>
+            <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-slate-500">Initialising...</p>
           </div>
         </div>
       </AppShell>
