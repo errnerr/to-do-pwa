@@ -14,7 +14,7 @@ import { format, isToday, isBefore, startOfDay } from "date-fns";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
-import { Drawer as DateDrawer, DrawerTrigger as DateDrawerTrigger, DrawerContent as DateDrawerContent, DrawerHeader as DateDrawerHeader, DrawerTitle as DateDrawerTitle } from "@/components/ui/drawer";
+import { Drawer as DateDrawer, DrawerTrigger as DateDrawerTrigger, DrawerContent as DateDrawerContent} from "@/components/ui/drawer";
 import { Switch } from "@/components/ui/switch";
 import { 
   subscribeToPushNotifications, 
